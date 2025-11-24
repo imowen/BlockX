@@ -1,0 +1,116 @@
+import React, { useState, useCallback } from 'react';
+import ImageUploader from './components/ImageUploader';
+import GridPreview from './components/GridPreview';
+import Sidebar from './components/Sidebar';
+import { ImageInfo, GridSettings, ProcessingState } from './types';
+import { DEFAULT_SETTINGS } from './constants';
+import { AlertCircle } from 'lucide-react';
+
+const App: React.FC = () => {
+  const [imageInfo, setImageInfo] = useState<ImageInfo | null>(null);
+  const [settings, setSettings] = useState<GridSettings>(DEFAULT_SETTINGS);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [processingState, setProcessingState] = useState<ProcessingState>({
+    isProcessing: false,
+    progress: 0,
+    error: null
+  });
+  const [globalError, setGlobalError] = useState<string | null>(null);
+
+  // Reset when new image loads
+  const handleImageSelected = useCallback((info: ImageInfo) => {
+    setImageInfo(info);
+    setSettings(prev => ({ ...DEFAULT_SETTINGS, rows: prev.rows, cols: prev.cols })); // Keep grid choice, reset others
+    setSelectedIndices(new Set());
+    setGlobalError(null);
+  }, []);
+
+  const handleReset = () => {
+    setImageInfo(null);
+    setSelectedIndices(new Set());
+    setProcessingState({ isProcessing: false, progress: 0, error: null });
+  };
+
+  const handleError = (msg: string) => {
+    setGlobalError(msg);
+    setTimeout(() => setGlobalError(null), 5000);
+  };
+
+  const handleSelectAll = () => {
+    const total = settings.rows * settings.cols;
+    const newSet = new Set<number>();
+    for(let i = 0; i < total; i++) {
+        newSet.add(i);
+    }
+    setSelectedIndices(newSet);
+  };
+
+  const handleSelectNone = () => {
+    setSelectedIndices(new Set());
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-apple-gray p-4 flex items-center justify-center font-sans">
+      <div className="w-full max-w-7xl h-[92vh] flex flex-col md:flex-row gap-6">
+        
+        {/* Global Error Toast */}
+        {globalError && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-white/80 backdrop-blur-md border border-red-200 text-red-600 px-6 py-3 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
+            <AlertCircle size={18} />
+            <span className="font-medium text-sm">{globalError}</span>
+          </div>
+        )}
+
+        {/* LEFT PANEL: Preview / Upload */}
+        <div className="flex-1 bg-white rounded-[32px] border border-apple-border/60 p-4 md:p-6 shadow-sm relative overflow-hidden flex flex-col">
+          <div className="flex justify-between items-center mb-2 flex-shrink-0">
+             <div className="flex items-center gap-3">
+               <div className="w-3 h-3 rounded-full bg-red-400"></div>
+               <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+               <div className="w-3 h-3 rounded-full bg-green-400"></div>
+             </div>
+             <div className="text-xs font-medium text-apple-subtext uppercase tracking-widest">
+               预览
+             </div>
+          </div>
+
+          <div className="flex-1 min-h-0 w-full relative">
+            {imageInfo ? (
+              <GridPreview 
+                imageInfo={imageInfo}
+                settings={settings}
+                selectedIndices={selectedIndices}
+                onSelectionChange={setSelectedIndices}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                 <div className="w-full max-w-md aspect-square md:aspect-auto">
+                    <ImageUploader onImageSelected={handleImageSelected} onError={handleError} />
+                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT PANEL: Controls */}
+        <div className="w-full md:w-[360px] flex-shrink-0 flex flex-col h-full">
+           <Sidebar 
+             imageInfo={imageInfo}
+             settings={settings}
+             setSettings={setSettings}
+             onReset={handleReset}
+             selectedCount={selectedIndices.size}
+             totalSlices={settings.rows * settings.cols}
+             processingState={processingState}
+             setProcessingState={setProcessingState}
+             selectedIndices={selectedIndices}
+             onSelectAll={handleSelectAll}
+             onResetSelection={handleSelectNone}
+           />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
