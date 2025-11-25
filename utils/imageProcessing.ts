@@ -16,27 +16,18 @@ export const loadImage = (src: string): Promise<HTMLImageElement> => {
 };
 
 /**
- * Calculates the dimensions of the image to be processed based on crop mode
+ * Calculates the dimensions of the "Viewport" (The final output area)
  */
-export const getProcessedDimensions = (
+export const getViewportDimensions = (
   imgWidth: number,
   imgHeight: number,
   cropMode: string
 ) => {
-  let processWidth = imgWidth;
-  let processHeight = imgHeight;
-  let offsetX = 0;
-  let offsetY = 0;
-
   if (cropMode === 'square') {
     const minDim = Math.min(imgWidth, imgHeight);
-    processWidth = minDim;
-    processHeight = minDim;
-    offsetX = (imgWidth - minDim) / 2;
-    offsetY = (imgHeight - minDim) / 2;
+    return { width: minDim, height: minDim };
   }
-
-  return { width: processWidth, height: processHeight, offsetX, offsetY };
+  return { width: imgWidth, height: imgHeight };
 };
 
 export const processAndDownload = async (
@@ -46,18 +37,55 @@ export const processAndDownload = async (
   onProgress: (percent: number) => void
 ) => {
   const { src, originalName } = imageInfo;
-  const { rows, cols, format, cropMode } = settings;
+  const { rows, cols, format, cropMode, scale, offsetX, offsetY } = settings;
 
   try {
     const img = await loadImage(src);
     const zip = new JSZip();
     
-    // Determine effective image area
-    const { width: effectiveWidth, height: effectiveHeight, offsetX, offsetY } = 
-      getProcessedDimensions(img.width, img.height, cropMode);
+    // 1. Determine Viewport Dimensions (The total size of the grid)
+    const viewport = getViewportDimensions(img.width, img.height, cropMode);
+    
+    // 2. Create a canvas representing the Viewport
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error("Could not create canvas context");
 
-    const sliceWidth = effectiveWidth / cols;
-    const sliceHeight = effectiveHeight / rows;
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    // 3. Draw the image onto the viewport with transformations
+    // Clear background
+    ctx.clearRect(0, 0, viewport.width, viewport.height);
+    
+    // Calculate draw dimensions based on scale
+    const drawWidth = img.width * scale;
+    const drawHeight = img.height * scale;
+
+    // Calculate centering offsets base
+    let baseX = 0;
+    let baseY = 0;
+
+    if (cropMode === 'square') {
+      // Center image in square viewport
+      baseX = (viewport.width - drawWidth) / 2;
+      baseY = (viewport.height - drawHeight) / 2;
+    } else {
+      // Center image in original viewport (viewport matches img ratio, but scale changes size)
+      baseX = (viewport.width - drawWidth) / 2;
+      baseY = (viewport.height - drawHeight) / 2;
+    }
+
+    // Apply user pan offsets
+    const finalX = baseX + offsetX;
+    const finalY = baseY + offsetY;
+
+    // Draw the processed image to the master canvas
+    ctx.drawImage(img, finalX, finalY, drawWidth, drawHeight);
+
+    // 4. Slice Generation
+    const sliceWidth = viewport.width / cols;
+    const sliceHeight = viewport.height / rows;
 
     const totalSlices = rows * cols;
     const slicesToExport = selectedIndices.size > 0 
@@ -66,38 +94,29 @@ export const processAndDownload = async (
 
     let processedCount = 0;
 
-    // We can't use OffscreenCanvas in all browsers reliably with strictly typed TS without config,
-    // so we use a standard canvas element.
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    const sliceCanvas = document.createElement('canvas');
+    const sliceCtx = sliceCanvas.getContext('2d');
+    if (!sliceCtx) throw new Error("Ctx error");
 
-    if (!ctx) throw new Error("Could not create canvas context");
-
-    canvas.width = sliceWidth;
-    canvas.height = sliceHeight;
+    sliceCanvas.width = sliceWidth;
+    sliceCanvas.height = sliceHeight;
 
     for (const index of slicesToExport) {
       const row = Math.floor(index / cols);
       const col = index % cols;
 
-      // Clear previous
-      ctx.clearRect(0, 0, sliceWidth, sliceHeight);
+      sliceCtx.clearRect(0, 0, sliceWidth, sliceHeight);
 
-      // Source X/Y calculation
-      // sourceX = globalOffset + (col * sliceWidth)
-      const sx = offsetX + (col * sliceWidth);
-      const sy = offsetY + (row * sliceHeight);
-
-      ctx.drawImage(
-        img,
-        sx, sy, sliceWidth, sliceHeight, // Source
+      // Draw from master canvas to slice canvas
+      sliceCtx.drawImage(
+        canvas,
+        col * sliceWidth, row * sliceHeight, sliceWidth, sliceHeight, // Source
         0, 0, sliceWidth, sliceHeight    // Dest
       );
 
-      // Convert to blob
       const blob = await new Promise<Blob | null>((resolve) => {
         const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
-        canvas.toBlob(resolve, mimeType, 0.92);
+        sliceCanvas.toBlob(resolve, mimeType, 0.92);
       });
 
       if (blob) {
@@ -108,12 +127,10 @@ export const processAndDownload = async (
       }
 
       processedCount++;
-      onProgress(Math.round((processedCount / slicesToExport.length) * 50)); // First 50% is generation
+      onProgress(Math.round((processedCount / slicesToExport.length) * 50)); 
     }
 
     onProgress(60);
-    
-    // Generate Zip
     const content = await zip.generateAsync({ type: 'blob' }, (metadata) => {
         onProgress(60 + Math.round(metadata.percent * 0.4));
     });
@@ -121,7 +138,6 @@ export const processAndDownload = async (
     onProgress(100);
     const zipName = `${originalName.substring(0, originalName.lastIndexOf('.')) || 'sliced'}_grid.zip`;
     
-    // Fix for file-saver export structure on some CDNs
     const saveAs = (FileSaver as any).saveAs || FileSaver;
     saveAs(content, zipName);
 

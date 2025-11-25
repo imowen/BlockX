@@ -4,7 +4,7 @@ import GridPreview from './components/GridPreview';
 import Sidebar from './components/Sidebar';
 import { ImageInfo, GridSettings, ProcessingState } from './types';
 import { DEFAULT_SETTINGS } from './constants';
-import { AlertCircle, Upload, CheckSquare, XSquare, RefreshCw } from 'lucide-react';
+import { AlertCircle, Upload, CheckSquare, XSquare } from 'lucide-react';
 import Button from './components/ui/Button';
 
 const App: React.FC = () => {
@@ -21,7 +21,13 @@ const App: React.FC = () => {
   // Reset when new image loads
   const handleImageSelected = useCallback((info: ImageInfo) => {
     setImageInfo(info);
-    setSettings(prev => ({ ...DEFAULT_SETTINGS, rows: prev.rows, cols: prev.cols }));
+    setSettings(prev => ({ 
+      ...DEFAULT_SETTINGS, 
+      rows: prev.rows, 
+      cols: prev.cols,
+      // Reset transform on new image
+      scale: 1, offsetX: 0, offsetY: 0 
+    }));
     setSelectedIndices(new Set());
     setGlobalError(null);
   }, []);
@@ -50,11 +56,14 @@ const App: React.FC = () => {
     setSelectedIndices(new Set());
   };
 
+  const handleSettingsChange = (newSettings: Partial<GridSettings>) => {
+    setSettings(prev => ({ ...prev, ...newSettings }));
+  };
+
   return (
     <div className="min-h-screen w-full bg-apple-gray p-2 md:p-4 flex items-center justify-center font-sans">
       <div className="w-full max-w-7xl flex flex-col md:flex-row gap-3 md:h-[90vh]">
         
-        {/* Global Error Toast */}
         {globalError && (
           <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-white/80 backdrop-blur-md border border-red-200 text-red-600 px-6 py-3 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
             <AlertCircle size={18} />
@@ -63,10 +72,9 @@ const App: React.FC = () => {
         )}
 
         {/* LEFT PANEL: Preview / Upload */}
-        {/* Mobile: fixed height (50vh) or min-height. Desktop: full height. */}
+        {/* Mobile: fixed height (50vh) or min-height to ensure image shows. Desktop: full height. */}
         <div className="flex-1 bg-white rounded-[24px] md:rounded-[32px] border border-apple-border/60 p-3 md:p-5 shadow-sm relative overflow-hidden flex flex-col h-[55vh] md:h-full min-h-[400px]">
           
-          {/* Header with Traffic Lights & Actions */}
           <div className="flex justify-between items-center mb-2 flex-shrink-0 min-h-[32px]">
              <div className="flex items-center gap-2">
                <div className="flex gap-1.5 mr-2">
@@ -79,12 +87,10 @@ const App: React.FC = () => {
                </span>
              </div>
 
-             {/* Top Actions (Moved from Sidebar) */}
              {imageInfo && (
                <div className="flex items-center gap-2">
                  <Button 
-                   variant="ghost" 
-                   onClick={handleSelectAll} 
+                   variant="ghost" onClick={handleSelectAll} 
                    className="h-7 px-2 text-xs flex items-center gap-1 hover:bg-gray-100 rounded-lg text-apple-text"
                    title="全选"
                  >
@@ -92,8 +98,7 @@ const App: React.FC = () => {
                    <span className="hidden sm:inline">全选</span>
                  </Button>
                  <Button 
-                   variant="ghost" 
-                   onClick={handleSelectNone} 
+                   variant="ghost" onClick={handleSelectNone} 
                    className="h-7 px-2 text-xs flex items-center gap-1 hover:bg-gray-100 rounded-lg text-apple-text"
                    title="重置选中"
                  >
@@ -102,8 +107,7 @@ const App: React.FC = () => {
                  </Button>
                  <div className="w-px h-4 bg-gray-200 mx-1"></div>
                  <Button 
-                   variant="ghost" 
-                   onClick={handleReset} 
+                   variant="ghost" onClick={handleReset} 
                    className="h-7 px-2 text-xs flex items-center gap-1 hover:bg-gray-100 rounded-lg text-apple-blue font-medium"
                    title="重新上传"
                  >
@@ -121,6 +125,7 @@ const App: React.FC = () => {
                 settings={settings}
                 selectedIndices={selectedIndices}
                 onSelectionChange={setSelectedIndices}
+                onSettingsChange={handleSettingsChange}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">

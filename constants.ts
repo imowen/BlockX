@@ -9,6 +9,9 @@ export const DEFAULT_SETTINGS: GridSettings = {
   format: 'png',
   cropMode: 'original',
   squareFit: 'center',
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0
 };
 
 export const SUPPORTED_FORMATS = ['image/png', 'image/jpeg', 'image/webp', 'image/jpg'];

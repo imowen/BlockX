@@ -16,6 +16,10 @@ export interface GridSettings {
   format: ExportFormat;
   cropMode: CropMode;
   squareFit: SquareFit;
+  // New transformation properties
+  scale: number;
+  offsetX: number;
+  offsetY: number;
 }
 
 export interface ProcessingState {
